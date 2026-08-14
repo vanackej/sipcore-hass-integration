@@ -1,0 +1,132 @@
+name: Bug Report
+description: Report a defect in SIP Core, official cards/popups, WebRTC calling, or related Home Assistant integration behavior.
+title: "[Bug]: "
+labels: [bug, needs-triage]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an issue.
+
+        Use this form for clear software defects in this repository, including:
+        - SIP Core / WebRTC calling (make & receive, video, DTMF)
+        - Official cards (`sip-call-card`, `sip-contacts-card`, `sip-call-button`)
+        - Default popup / incoming-call UI
+        - Ringtones, audio device selection, auto-call URL param
+        - API for third-party cards and popups
+        - Installation / HACS / docs problems that look like bugs
+
+        For feature ideas or enhancements, use the Feature Request template instead.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the integration is primarily affected?
+      options:
+        - SIP Core / WebRTC / calling engine
+        - Default popup / incoming-call UI
+        - Call Card (`sip-call-card`)
+        - Contacts Card (`sip-contacts-card`)
+        - Call Button Card (`sip-call-button`)
+        - Ringtones / audio devices / media
+        - Third-party card / popup API
+        - Installation / HACS / configuration
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: summary
+    attributes:
+      label: Bug Summary
+      description: Short, clear description of what went wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps that reliably reproduce the issue.
+      placeholder: |
+        1. Open the dashboard with `sip-call-card` / contacts / call-button
+        2. Start (or receive) a call to extension …
+        3. …
+        4. Observe the failure
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include Home Assistant, browser, SIP/PBX, and relevant config details.
+      placeholder: |
+        Example:
+        - Home Assistant: 2025.x.x (OS / Supervised / Container / Core)
+        - SIP Core / integration version: (HACS or git)
+        - Browser / device: Chrome 1xx on desktop / companion app / tablet
+        - HTTPS: yes (required)
+        - SIP/PBX: Asterisk add-on x.x / other PBX
+        - Card type & config snippet (if relevant)
+        - Any relevant entities (camera, status, etc.)
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs / Evidence
+      description: Paste relevant browser console errors, Home Assistant logs, screenshots, or links that show the problem.
+      placeholder: |
+        - Browser console errors
+        - HA logs related to sipcore / WebRTC
+        - Screenshots of the card or popup
+        - Network / WebRTC failures if visible
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is the impact?
+      options:
+        - Cosmetic / minor friction
+        - Degrades calling or card UX
+        - Blocks make or receive calls
+        - Critical (e.g. crash, no audio/video, broken install)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: pre_submit_checks
+    attributes:
+      label: Before Submitting
+      options:
+        - label: I checked the README and SIP-HASS Docs for known setup requirements (HTTPS, SIP/PBX, HACS).
+        - label: I searched existing issues and PRs for the same or similar problem.
+        - label: I can reproduce this (or have clear evidence if intermittent).
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Card YAML, related issues, workarounds, or anything else that helps triage.
