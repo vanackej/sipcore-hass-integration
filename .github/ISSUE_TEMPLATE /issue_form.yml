@@ -1,0 +1,128 @@
+name: Feature Request
+description: Propose an enhancement for SIP Core, the official cards/popups, WebRTC calling, or related Home Assistant integration features.
+title: "[Feature]: "
+labels: [enhancement, needs-triage]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an improvement.
+
+        Use this form for new capabilities or workflow improvements in this repository, including:
+        - SIP Core / WebRTC calling (make & receive calls, video, DTMF)
+        - Official cards (`sip-call-card`, `sip-contacts-card`, `sip-call-button`)
+        - Default popup / incoming-call UI
+        - Ringtones, audio device selection, auto-call URL param
+        - API for third-party cards and popups
+        - Documentation, HACS installation, or related tooling
+
+  - type: input
+    id: feature_name
+    attributes:
+      label: Feature Summary
+      description: Short name for the proposed capability or change.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the repository is this request primarily about?
+      options:
+        - SIP Core / WebRTC / calling engine
+        - Default popup / incoming-call UI
+        - Call Card (`sip-call-card`)
+        - Contacts Card (`sip-contacts-card`)
+        - Call Button Card (`sip-call-button`)
+        - Ringtones / audio devices / media
+        - Third-party card / popup API
+        - Documentation / HACS / installation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: feature_description
+    attributes:
+      label: Proposed Change
+      description: Describe the capability or improvement in enough detail for maintainers to scope it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use Case
+      description: Explain the Home Assistant user, card developer, or calling workflow this would improve.
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_gap
+    attributes:
+      label: Current Limitation
+      description: What is difficult, missing, or error-prone today?
+      placeholder: |
+        Example:
+        - No way to select a specific audio output device from the popup
+        - Contacts card does not support custom status entities for presence
+        - Auto-call via `?call=` does not work reliably with video
+    validations:
+      required: true
+
+  - type: textarea
+    id: success_criteria
+    attributes:
+      label: Success Criteria
+      description: What concrete outcome would make this request complete?
+      placeholder: |
+        Example:
+        - New option is available in card configuration and documented
+        - Incoming calls show video when a camera entity is configured
+        - Users can complete setup from the docs + HACS installation
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Expected Impact
+      description: What is the main benefit if this gets implemented?
+      options:
+        - Improves daily calling experience
+        - Adds video / media capability
+        - Improves card configuration or UX
+        - Helps third-party card / popup developers
+        - Reduces setup / onboarding friction
+        - Improves docs or discoverability
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification Ideas
+      description: How should this be validated if implemented?
+      placeholder: |
+        Example:
+        - Manual test of make/receive call with the affected card
+        - Test incoming popup with video and DTMF
+        - Verify audio device selection and mute buttons
+        - Confirm HACS install + docs steps still work
+
+  - type: checkboxes
+    id: pre_submit_checks
+    attributes:
+      label: Before Submitting
+      options:
+        - label: I checked the README, SIP-HASS Docs, and relevant guides before filing this request.
+        - label: I searched existing issues and PRs for the same idea or gap.
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Add links, screenshots, related issues, card configs, or constraints (e.g. Asterisk add-on, HTTPS, browser).
