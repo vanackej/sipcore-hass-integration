@@ -97,6 +97,7 @@ export class SIPCore {
 
     private wssUrl!: string;
     private iceCandidateTimeout: ReturnType<typeof setTimeout> | null = null;
+    private visibilityRecoveryTimeout: ReturnType<typeof setTimeout> | null = null;
 
     public remoteAudioStream: MediaStream | null = null;
     public remoteVideoStream: MediaStream | null = null;
@@ -269,6 +270,37 @@ export class SIPCore {
         }
     }
 
+    /**
+     * Browsers suspend a hidden tab's JS timers (including the UA's own
+     * heartbeat/registration-retry timers), which can leave the WebSocket
+     * silently dead by the time the tab becomes visible again - most
+     * noticeable on an always-on kiosk display whose screen turns off on a
+     * timer. Neither `registered`/`unregistered`/`registrationFailed` fire in
+     * that case, since nothing ever told the UA the transport failed. Watch
+     * for the page becoming visible again and, if the UA still isn't
+     * registered a few seconds later (and no call is in progress), restart
+     * it explicitly rather than leaving the client silently unreachable
+     * until something else notices.
+     */
+    private setupVisibilityRecovery() {
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "visible") return;
+            if (this.visibilityRecoveryTimeout != null) {
+                clearTimeout(this.visibilityRecoveryTimeout);
+            }
+            this.visibilityRecoveryTimeout = setTimeout(() => {
+                this.visibilityRecoveryTimeout = null;
+                if (document.visibilityState !== "visible") return;
+                if (this.registered) return;
+                if (this.callState !== CALLSTATE.IDLE) return; // never interrupt an active call
+                console.warn("SIP Core: still unregistered after becoming visible again, reconnecting...");
+                this.ua.stop();
+                this.ua = this.setupUA();
+                this.ua.start();
+            }, 4000);
+        });
+    }
+
     private startCallTimer() {
         this.callTimerHandle = setInterval(() => {
             this.triggerUpdate();
@@ -305,6 +337,7 @@ export class SIPCore {
 
         console.debug(`Connecting to ${this.wssUrl}...`);
         this.ua.start();
+        this.setupVisibilityRecovery();
         if (this.config.popup_config !== null) {
             this.setupPopup();
         }
