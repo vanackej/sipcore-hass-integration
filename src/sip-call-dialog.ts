@@ -282,6 +282,9 @@ class SIPCallDialog extends LitElement {
     closePopup() {
         this.open = false;
         this.stopCameraRefresh();
+        this.go2rtcIngressKey = "";
+        this.go2rtcIngressFrameUrl = "";
+        this.go2rtcIngressFailed = false;
         this.requestUpdate();
     }
 
