@@ -7,6 +7,13 @@ interface Extension {
     name: string;
     extension: string;
     camera_entity: string | null;
+    stream_name?: string | null;
+    go2rtc_stream?: string | null;
+    go2rtc_url?: string | null;
+    go2rtc_stream_url?: string | null;
+    go2rtc_ingress?: boolean | null;
+    go2rtc_addon_slug?: string | null;
+    live_provider?: string | null;
 }
 
 enum ButtonType {
@@ -59,6 +66,22 @@ class SIPCallDialog extends LitElement {
 
     @state()
     private currentCamera: string = "";
+
+    @state()
+    private cameraImageCacheBuster = Date.now();
+
+    @state()
+    private cameraStreamFailed = false;
+
+    @state()
+    private go2rtcIngressFrameUrl = "";
+
+    @state()
+    private go2rtcIngressFailed = false;
+
+    private go2rtcIngressKey = "";
+
+    private cameraRefreshInterval: number | undefined;
 
     constructor() {
         super();
@@ -119,15 +142,27 @@ class SIPCallDialog extends LitElement {
                 display: block;
             }
 
-            webrtc-camera {
-                height: 100%;
+            hui-image {
                 width: 100%;
                 display: block;
             }
 
-            webrtc-camera video {
+            .sip-camera-image {
+                display: block;
                 width: 100%;
                 height: 100%;
+                object-fit: contain;
+                background: #000;
+            }
+
+            .sip-camera-frame {
+                display: block;
+                width: 100%;
+                height: 100%;
+                min-height: 320px;
+                border: 0;
+                background: #000;
+                overflow: hidden;
             }
 
             #remoteVideo {
@@ -212,30 +247,7 @@ class SIPCallDialog extends LitElement {
             }
         }
         this.updateButtonState();
-        this.updateWebRTCCamera();
     };
-
-    updateWebRTCCamera() {
-        const element = this.renderRoot.querySelector('webrtc-camera') as any;
-        if (element && this.currentCamera) {
-            if (!element.config || element.config.entity !== this.currentCamera) {
-                element.setConfig({
-                    entity: this.currentCamera,
-                    muted: true,
-                    ui: false, // Disable custom UI buttons
-                });
-                element.hass = this.hass;
-                // Disable native video controls
-                if (element.video) {
-                    element.video.controls = false;
-                }
-                // Trigger connection
-                if (element.onconnect) {
-                    element.onconnect();
-                }
-            }
-        }
-    }
 
     connectedCallback() {
         super.connectedCallback();
@@ -253,6 +265,7 @@ class SIPCallDialog extends LitElement {
     disconnectedCallback() {
         super.disconnectedCallback();
         window.removeEventListener("sipcore-update", this.updateHandler);
+        this.stopCameraRefresh();
 
         if (this.config.auto_open !== false) {
             window.removeEventListener("sipcore-call-started", this.openPopup);
@@ -270,33 +283,241 @@ class SIPCallDialog extends LitElement {
 
     closePopup() {
         this.open = false;
+        this.stopCameraRefresh();
+        this.go2rtcIngressKey = "";
+        this.go2rtcIngressFrameUrl = "";
+        this.go2rtcIngressFailed = false;
         this.requestUpdate();
     }
 
+    private ensureCameraRefresh(camera: string) {
+        if (this.currentCamera !== camera) {
+            this.currentCamera = camera;
+            this.cameraImageCacheBuster = Date.now();
+        }
+
+        if (this.cameraRefreshInterval !== undefined) return;
+
+        this.cameraRefreshInterval = window.setInterval(() => {
+            if (!this.open || !this.currentCamera || sipCore.callState === CALLSTATE.IDLE) {
+                this.stopCameraRefresh();
+                return;
+            }
+
+            this.cameraImageCacheBuster = Date.now();
+            this.requestUpdate();
+        }, 1000);
+    }
+
+    private stopCameraRefresh() {
+        if (this.cameraRefreshInterval === undefined) return;
+
+        window.clearInterval(this.cameraRefreshInterval);
+        this.cameraRefreshInterval = undefined;
+    }
+
+    private getCameraImageUrl(camera: string) {
+        const stateObj = this.hass?.states?.[camera];
+        const entityPicture = stateObj?.attributes?.entity_picture as string | undefined;
+        const accessToken = stateObj?.attributes?.access_token as string | undefined;
+        const baseUrl = entityPicture || `/api/camera_proxy/${camera}${accessToken ? `?token=${accessToken}` : ""}`;
+        const separator = baseUrl.includes("?") ? "&" : "?";
+
+        return `${baseUrl}${separator}sipcore_ts=${this.cameraImageCacheBuster}`;
+    }
+
+    private getGo2RTCFrameUrl(extension?: Extension) {
+        const streamName = extension?.stream_name || extension?.go2rtc_stream || "";
+        const configuredUrl = extension?.go2rtc_stream_url || extension?.go2rtc_url || "";
+        if (!streamName || !configuredUrl) return "";
+
+        let url = configuredUrl.trim();
+        if (!url) return "";
+
+        if (url.includes("/api/homekit")) {
+            url = url.split("/api/homekit")[0];
+        } else if (url.includes("/api/webtorrent")) {
+            url = url.split("/api/webtorrent")[0];
+        }
+
+        if (!url.includes("stream.html")) {
+            url = `${url.replace(/\/$/, "")}/stream.html`;
+        }
+
+        const separator = url.includes("?") ? "&" : "?";
+        const mode = extension?.live_provider === "webrtc" ? "webrtc" : "mse";
+
+        return `${url}${separator}src=${encodeURIComponent(streamName)}&mode=${encodeURIComponent(mode)}&width=100%`;
+    }
+
+    private async ensureGo2RTCIngressFrameUrl(extension?: Extension) {
+        const streamName = extension?.stream_name || extension?.go2rtc_stream || "";
+        if (!this.hass || !streamName || !extension?.go2rtc_ingress) return;
+
+        const mode = extension?.live_provider === "webrtc" ? "webrtc" : "mse";
+        const key = `${streamName}|${mode}`;
+        if (this.go2rtcIngressKey === key && (this.go2rtcIngressFrameUrl || this.go2rtcIngressFailed)) return;
+
+        this.go2rtcIngressKey = key;
+        this.go2rtcIngressFrameUrl = "";
+        this.go2rtcIngressFailed = false;
+
+        try {
+            const sessionResult = await this.hass.callWS({
+                type: "supervisor/api",
+                endpoint: "/ingress/session",
+                method: "post",
+            });
+
+            const session = sessionResult?.session;
+            if (!session) throw new Error("Supervisor did not return an ingress session");
+
+            document.cookie =
+                `ingress_session=${session}; path=/; SameSite=Lax` +
+                (window.location.protocol === "https:" ? "; Secure" : "");
+
+            let ingressUrl = extension?.go2rtc_stream_url || extension?.go2rtc_url || "";
+
+            if (!ingressUrl) {
+                const configuredSlug = extension?.go2rtc_addon_slug || "";
+                let addonInfo: any = undefined;
+
+                if (configuredSlug) {
+                    try {
+                        addonInfo = await this.hass.callWS({
+                            type: "supervisor/api",
+                            endpoint: `/addons/${configuredSlug}/info`,
+                            method: "get",
+                        });
+                    } catch (err) {
+                        console.warn(`SIP-Core go2rtc add-on slug ${configuredSlug} failed, trying auto-discovery`, err);
+                    }
+                }
+
+                if (!addonInfo) {
+                    const addonsResult = await this.hass.callWS({
+                        type: "supervisor/api",
+                        endpoint: "/addons",
+                        method: "get",
+                    });
+
+                    const addons = addonsResult?.addons || [];
+                    const go2rtcAddon = addons.find((addon: any) => {
+                        const slug = String(addon?.slug || "").toLowerCase();
+                        const name = String(addon?.name || "").toLowerCase();
+                        return slug.includes("go2rtc") || name.includes("go2rtc");
+                    });
+
+                    if (go2rtcAddon?.slug) {
+                        addonInfo = await this.hass.callWS({
+                            type: "supervisor/api",
+                            endpoint: `/addons/${go2rtcAddon.slug}/info`,
+                            method: "get",
+                        });
+                    }
+                }
+
+                ingressUrl = addonInfo?.ingress_url || addonInfo?.ingress_entry || "";
+            }
+
+            if (!ingressUrl) {
+                throw new Error("No go2rtc ingress URL available. Configure go2rtc_addon_slug or go2rtc_url.");
+            }
+
+            let url = ingressUrl.trim();
+            if (url.includes("/api/homekit")) {
+                url = url.split("/api/homekit")[0];
+            } else if (url.includes("/api/webtorrent")) {
+                url = url.split("/api/webtorrent")[0];
+            }
+
+            if (!url.includes("stream.html")) {
+                url = `${url.replace(/\/$/, "")}/stream.html`;
+            }
+
+            const separator = url.includes("?") ? "&" : "?";
+
+            if (this.go2rtcIngressKey === key) {
+                this.go2rtcIngressFrameUrl = `${url}${separator}` +
+                    `src=${encodeURIComponent(streamName)}` +
+                    `&mode=${encodeURIComponent(mode)}` +
+                    `&width=100%`;
+                this.requestUpdate();
+            }
+        } catch (err) {
+            console.warn("SIP-Core could not create go2rtc Ingress session, falling back", err);
+            if (this.go2rtcIngressKey === key) {
+                this.go2rtcIngressFailed = true;
+                this.requestUpdate();
+            }
+        }
+    }
+
     renderCameraStream(camera: string) {
-        // Store camera for updates
-        this.currentCamera = camera;
+        this.hass = sipCore.hass || this.hass;
 
-        // Check if WebRTC Camera component is available for low-latency streaming
-        const hasWebRTC = customElements.get('webrtc-camera');
+        if (this.currentCamera !== camera) {
+            this.currentCamera = camera;
+            this.cameraStreamFailed = false;
+            this.go2rtcIngressKey = "";
+            this.go2rtcIngressFrameUrl = "";
+            this.go2rtcIngressFailed = false;
+            this.cameraImageCacheBuster = Date.now();
+        }
 
-        if (hasWebRTC) {
-            // Use WebRTC for low-latency streaming
-            // Schedule configuration after render
-            requestAnimationFrame(() => this.updateWebRTCCamera());
+        if (!this.hass?.states?.[camera]) {
+            console.warn(`Camera entity ${camera} was not found, cannot render SIP call camera stream.`);
+            return html``;
+        }
 
-            return html`<webrtc-camera></webrtc-camera>`;
-        } else {
-            // Fall back to standard Home Assistant camera stream (higher latency)
+        const extension = this.config.extensions[sipCore.remoteExtension || ""];
+        const streamName = extension?.stream_name || extension?.go2rtc_stream || "";
+        const go2rtcFrameUrl = this.getGo2RTCFrameUrl(extension);
+
+        if (extension?.go2rtc_ingress && streamName && !this.go2rtcIngressFailed) {
+            this.stopCameraRefresh();
+            this.ensureGo2RTCIngressFrameUrl(extension);
+
+            if (this.go2rtcIngressFrameUrl) {
+                return html`
+                    <iframe
+                        class="sip-camera-frame"
+                        src=${this.go2rtcIngressFrameUrl}
+                        allow="autoplay; fullscreen; microphone; camera"
+                    ></iframe>
+                `;
+            }
+
             return html`
-                <ha-camera-stream
-                    allow-exoplayer
-                    muted
-                    .hass=${this.hass}
-                    .stateObj=${this.hass.states[camera]}
-                ></ha-camera-stream>
+                <img
+                    class="sip-camera-image"
+                    alt=""
+                    src=${this.getCameraImageUrl(camera)}
+                />
             `;
         }
+
+        if (go2rtcFrameUrl) {
+            this.stopCameraRefresh();
+
+            return html`
+                <iframe
+                    class="sip-camera-frame"
+                    src=${go2rtcFrameUrl}
+                    allow="autoplay; fullscreen; microphone; camera"
+                ></iframe>
+            `;
+        }
+
+        this.ensureCameraRefresh(camera);
+
+        return html`
+            <img
+                class="sip-camera-image"
+                alt=""
+                src=${this.getCameraImageUrl(camera)}
+            />
+        `;
     }
 
     render() {
@@ -314,6 +535,9 @@ class SIPCallDialog extends LitElement {
                 label: device.label || "Audio input",
             })),
         ];
+        this.hass = sipCore.hass || this.hass;
+        this.config = (sipCore.config?.popup_config || this.config) as PopupConfig;
+
         let camera: string = "";
         let statusText;
         let phoneIcon: string;
