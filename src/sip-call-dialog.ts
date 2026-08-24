@@ -29,6 +29,8 @@ interface PopupConfig {
     hide_header_button?: boolean;
 }
 
+const DEFAULT_AUDIO_DEVICE_ID = "__default__";
+
 @customElement("sip-call-dialog")
 class SIPCallDialog extends LitElement {
     @property()
@@ -298,6 +300,20 @@ class SIPCallDialog extends LitElement {
     }
 
     render() {
+        const outputOptions = [
+            { value: DEFAULT_AUDIO_DEVICE_ID, label: "Default Output" },
+            ...this.outputDevices.map((device) => ({
+                value: device.deviceId,
+                label: device.label || "Audio output",
+            })),
+        ];
+        const inputOptions = [
+            { value: DEFAULT_AUDIO_DEVICE_ID, label: "Default Input" },
+            ...this.inputDevices.map((device) => ({
+                value: device.deviceId,
+                label: device.label || "Audio input",
+            })),
+        ];
         let camera: string = "";
         let statusText;
         let phoneIcon: string;
@@ -368,58 +384,20 @@ class SIPCallDialog extends LitElement {
                             fixedMenuPosition
                             icon
                             label=${"Audio Output"}
-                            .value="${sipCore.AudioOutputId || "null"}"
+                            .value=${sipCore.AudioOutputId ?? DEFAULT_AUDIO_DEVICE_ID}
+                            .options=${outputOptions}
                             @selected=${this.handleAudioOutputChange}
                             @closed="${(event: { stopPropagation: () => any }) => event.stopPropagation()}">
-                            <ha-list-item
-                                graphic="icon"
-                                .value="${"null"}"
-                                ?selected=${sipCore.AudioOutputId === null}>
-                                Default Output
-                                <ha-icon slot="graphic" .icon=${"mdi:headphones"}></ha-icon>
-                            </ha-list-item>
-                            ${this.outputDevices.map(
-                                (device) => html`
-                                    <ha-list-item
-                                        graphic="icon"
-                                        .value="${device.deviceId}"
-                                        ?selected=${sipCore.AudioOutputId === device.deviceId}
-                                    >
-                                        ${device.label}
-                                        <ha-icon slot="graphic" .icon=${"mdi:headphones"}></ha-icon>
-                                    </ha-list-item>
-                                `,
-                            )}
-                            <ha-icon slot="icon" .icon=${"mdi:headphones"}></ha-icon>
                         </ha-select>
                         <ha-select
                             naturalMenuWidth
                             fixedMenuPosition
                             icon
                             label=${"Audio Input"}
-                            .value="${sipCore.AudioInputId || "null"}"
+                            .value=${sipCore.AudioInputId ?? DEFAULT_AUDIO_DEVICE_ID}
+                            .options=${inputOptions}
                             @selected=${this.handleAudioInputChange}
                             @closed="${(event: { stopPropagation: () => any }) => event.stopPropagation()}">
-                            <ha-list-item
-                                graphic="icon"
-                                .value="${"null"}"
-                                ?selected=${sipCore.AudioInputId === null}>
-                                Default Input
-                                <ha-icon slot="graphic" .icon=${"mdi:microphone"}></ha-icon>
-                            </ha-list-item>
-                            ${this.inputDevices.map(
-                                (device) => html`
-                                    <ha-list-item
-                                        graphic="icon"
-                                        .value="${device.deviceId}"
-                                        ?selected=${sipCore.AudioInputId === device.deviceId}
-                                    >
-                                        ${device.label}
-                                        <ha-icon slot="graphic" .icon=${"mdi:microphone"}></ha-icon>
-                                    </ha-list-item>
-                                `,
-                            )}
-                            <ha-icon slot="icon" .icon=${"mdi:microphone"}></ha-icon>
                         </ha-select>
                         <ha-settings-row>
                             <span slot="heading">Logged in as ${sipCore.user.ha_username} <span style="color: gray;">(${sipCore.user.extension})</span></span>
@@ -612,15 +590,20 @@ class SIPCallDialog extends LitElement {
 
     }
 
+    private selectedAudioDeviceId(event: Event): string | null {
+        const selected = event as CustomEvent<{ value?: string }>;
+        const target = event.target as HTMLSelectElement;
+        const value = selected.detail?.value ?? target.value;
+        return !value || value === DEFAULT_AUDIO_DEVICE_ID ? null : value;
+    }
+
     private handleAudioInputChange(event: Event) {
-        const select = event.target as HTMLSelectElement;
-        sipCore.AudioInputId = select.value === "null" ? null : select.value;
+        sipCore.AudioInputId = this.selectedAudioDeviceId(event);
         this.requestUpdate();
     }
 
     private handleAudioOutputChange(event: Event) {
-        const select = event.target as HTMLSelectElement;
-        sipCore.AudioOutputId = select.value === "null" ? null : select.value;
+        sipCore.AudioOutputId = this.selectedAudioDeviceId(event);
         this.requestUpdate();
     }
 
