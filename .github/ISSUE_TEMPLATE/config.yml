@@ -1,0 +1,18 @@
+# Issue templates for the SIP Core (sipcore-hass-integration)
+repository.blank_issues_enabled: false
+contact_links:
+  - name: README & Overview
+    url: https://github.com/TECH7Fox/sipcore-hass-integration#readme
+    about: Check features, requirements (HTTPS, SIP/PBX, HACS), and official cards before opening an issue.
+  - name: SIP-HASS Docs
+    url: https://tech7fox.github.io/sip-hass-docs/
+    about: Installation, configuration, cards, popups, and guides for the SIP-HASS project.
+  - name: SIP-HASS Discord
+    url: https://discord.gg/qxnDtHbwuD
+    about: Community support and discussion for SIP Core and related cards.
+  - name: HACS Installation Guide
+    url: https://tech7fox.github.io/sip-hass-docs/docs/card/introduction
+    about: Use this when the main problem is installing or configuring SIP Core via HACS.
+  - name: Asterisk Add-on (recommended PBX)
+    url: https://github.com/TECH7Fox/Asterisk-add-on
+    about: SIP Core works best with a SIP/PBX server; the Asterisk add-on is the recommended option.
