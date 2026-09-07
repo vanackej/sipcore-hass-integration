@@ -301,6 +301,28 @@ export class SIPCore {
     }
 
     /**
+     * Resolves once the popup component is able to receive `sipcore-call-started`.
+     *
+     * The popup only subscribes to that event from its `connectedCallback`, so
+     * placing a call in the same turn as `setupPopup()` races it: the element is
+     * already in the DOM but not yet listening, the event is missed, and `open`
+     * stays false for the whole call -- leaving no way to hang up. Only the
+     * autocall path is affected, since every other caller runs long after setup.
+     *
+     * Bounded by a timeout so a misconfigured `popup_override_component` that is
+     * never defined delays the call instead of dropping it.
+     */
+    private async waitForPopup(timeoutMs: number = 2000): Promise<void> {
+        const popupComponent = this.config.popup_override_component || "sip-call-dialog";
+        await Promise.race([
+            customElements
+                .whenDefined(popupComponent)
+                .then(() => (document.getElementsByTagName(popupComponent)[0] as any)?.updateComplete),
+            new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+        ]);
+    }
+
+    /**
      * Browsers suspend a hidden tab's JS timers (including the UA's own
      * heartbeat/registration-retry timers), which can leave the WebSocket
      * silently dead by the time the tab becomes visible again - most
@@ -377,6 +399,7 @@ export class SIPCore {
         const autocall_extension = new URLSearchParams(window.location.search).get("call");
         if (autocall_extension) {
             console.info(`Autocalling ${autocall_extension}...`);
+            await this.waitForPopup();
             this.startCall(autocall_extension);
         }
     }
